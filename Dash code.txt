@@ -1,0 +1,78 @@
+import pandas as pd
+import dash
+from dash import dcc, html, Input, Output
+import plotly.express as px
+
+# Load the data from the given data source
+url = 'https://query.data.world/s/y6ca5jevgcclanq6wo6pypqf4vo46o?dws=00000'
+score_sales = pd.read_csv(url)
+
+# Convert the 'Year_of_Release' column to integers
+score_sales['Year_of_Release'] = pd.to_numeric(score_sales['Year_of_Release'], errors='coerce', downcast='integer')
+
+# Sort the years in ascending order for the Year of Release dropdown
+sorted_years = sorted(score_sales['Year_of_Release'].dropna().unique())
+
+# Sort the platforms in alphabetical order
+sorted_platforms = sorted(score_sales['Platform'].unique())
+
+# Create the Dash app
+app = dash.Dash(__name__)
+
+# Define the app layout
+app.layout = html.Div(children=[
+    html.H1(children='Sales Information Visualization'),
+
+    # Dropdown for Platform selection
+    html.Label('Platform'),
+    dcc.Dropdown(
+        id='platform-dropdown',
+        options=[{'label': platform, 'value': platform} for platform in sorted_platforms],
+        value=sorted_platforms[0]
+    ),
+
+    # Dropdown for Genre selection
+    html.Label('Genre'),
+    dcc.Dropdown(
+        id='genre-dropdown',
+        options=[{'label': genre, 'value': genre} for genre in score_sales['Genre'].dropna().unique()],
+        value='Action'
+    ),
+
+    # Dropdown for Year of Release selection
+    html.Label('Year of Release'),
+    dcc.Dropdown(
+        id='year-dropdown',
+        options=[{'label': str(int(year)), 'value': int(year)} for year in sorted_years],
+        value=2010
+    ),
+
+    # Placeholder for displaying visualizations
+    html.Div(id='visualization-container')
+])
+
+# Callback function to update visualizations based on user selections
+@app.callback(
+    Output('visualization-container', 'children'),
+    [Input('platform-dropdown', 'value'),
+     Input('genre-dropdown', 'value'),
+     Input('year-dropdown', 'value')])
+def update_visualizations(platform, genre, year):
+    filtered_data = score_sales[(score_sales['Platform'] == platform)]
+    
+    if genre:
+        filtered_data = filtered_data[(filtered_data['Genre'] == genre)]
+
+    if year:
+        filtered_data = filtered_data[(filtered_data['Year_of_Release'] == year)]
+
+    # Create visualizations based on filtered data
+    region_sales_columns = ['NA_Sales', 'EU_Sales', 'JP_Sales', 'Other_Sales']
+    region_sales_data = filtered_data[region_sales_columns].sum()
+    region_sales_fig = px.bar(region_sales_data.index, region_sales_data.values, labels={'x': 'Region', 'y': 'Sales'},
+                              title=f'Sales by Region for {genre} in Year {year}')
+    
+    return dcc.Graph(figure=region_sales_fig)
+
+if __name__ == '__main__':
+    app.run_server(debug=True)
